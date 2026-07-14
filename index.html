@@ -338,6 +338,42 @@
         .dot.state { background: #f5c2e7; }
         .dot.cond { background: #f9e2af; }
         .dot.expr { background: #f9e2af; }
+
+        /* Стиль для счётчика */
+        .footer-counter {
+            text-align: center;
+            margin-top: 30px;
+            padding: 15px 20px;
+            background: #1e1e2e;
+            border-radius: 16px;
+            border: 1px solid #45475a;
+            color: #6c7086;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .footer-counter a {
+            color: #89b4fa;
+            text-decoration: none;
+        }
+        .footer-counter a:hover {
+            text-decoration: underline;
+        }
+        .footer-counter .counter-img {
+            border: none;
+            vertical-align: middle;
+            background: transparent;
+            height: 24px;
+        }
+        .footer-counter .separator {
+            color: #45475a;
+        }
+        .footer-counter .label {
+            color: #a6e3a1;
+        }
     </style>
 </head>
 <body>
@@ -413,6 +449,22 @@ void loop() {
             <span id="genStatus" class="status"></span>
         </div>
     </div>
+
+    <!-- Счётчик посещений -->
+    <div class="footer-counter">
+        <span class="label">👁️ Посетителей:</span>
+        <a href="https://www.hitwebcounter.com" target="_blank">
+            <img src="https://hitwebcounter.com/counter/counter.php?page=17911823&style=0034&nbdigits=6&type=page&initCount=0" 
+                 alt="Счётчик посещений" 
+                 class="counter-img"
+                 title="Счётчик посещений">
+        </a>
+        <span class="separator">|</span>
+        <span class="separator">|</span>
+        <a href="https://github.com/GreenMan2022/Arduino-Visual-Code-Editor" target="_blank" style="color: #89b4fa;">
+            ⭐ GitHub
+        </a>
+    </div>
 </div>
 
 <script>
@@ -431,15 +483,12 @@ void loop() {
     // ---- Функция для авто-расширения поля ----
     function autoResizeInput(input) {
         if (!input) return;
-        // Создаём временный элемент для измерения
         const temp = document.createElement('span');
         temp.style.cssText = 'font-family: "Courier New", monospace; font-size: 0.9rem; padding: 1px 3px; visibility: hidden; position: absolute; white-space: pre;';
         temp.textContent = input.value || input.placeholder || '';
         document.body.appendChild(temp);
-        let width = temp.offsetWidth + 16; // Добавляем отступ для стрелок
+        let width = temp.offsetWidth + 16;
         document.body.removeChild(temp);
-        
-        // Минимальная и максимальная ширина
         width = Math.max(width, 30);
         width = Math.min(width, 500);
         input.style.width = width + 'px';
@@ -746,7 +795,6 @@ void loop() {
                         });
                         html += `</select>`;
                     } else if (token.inputType === 'number') {
-                        // Для чисел делаем чуть шире, чтобы цифры не перекрывались
                         const valLength = token.value.length;
                         const width = Math.min(Math.max(valLength * 10 + 16, 50), 150);
                         html += `<input type="number" value="${token.value}" data-field="${token.field}" data-id="${token.id}" style="min-width:40px; width:${width}px; padding-right:8px;">`;
@@ -770,7 +818,6 @@ void loop() {
 
         visualContainer.innerHTML = html;
 
-        // Авто-расширение для всех input
         visualContainer.querySelectorAll('input').forEach(input => {
             autoResizeInput(input);
             input.addEventListener('input', function() {
@@ -787,7 +834,6 @@ void loop() {
             el.addEventListener('change', regenerateCode);
         });
 
-        // Обновляем размеры после отрисовки
         setTimeout(() => {
             visualContainer.querySelectorAll('input').forEach(input => autoResizeInput(input));
         }, 100);
