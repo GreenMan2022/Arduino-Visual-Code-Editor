@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arduino Построчный Редактор</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .app {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #a6e3a1;
+            border-bottom: 2px solid #45475a;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        h1 small {
+            font-size: 0.9rem;
+            color: #89b4fa;
+            font-weight: 400;
+        }
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .toolbar button {
+            background: #313244;
+            border: none;
+            color: #cdd6f4;
+            padding: 10px 24px;
+            border-radius: 30px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        .toolbar button:hover {
+            background: #45475a;
+            transform: translateY(-1px);
+        }
+        .toolbar button.primary {
+            background: #89b4fa;
+            color: #1a1a2e;
+            font-weight: 600;
+        }
+        .toolbar button.primary:hover {
+            background: #74c7ec;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 20px;
+        }
+        @media (max-width: 1200px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .card {
+            background: #28283a;
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid #45475a;
+        }
+        .card h3 {
+            color: #cba6f7;
+            margin-bottom: 15px;
+            font-weight: 400;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card h3 .badge {
+            background: #45475a;
+            padding: 2px 12px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            color: #a6e3a1;
+        }
+        textarea {
+            width: 100%;
+            height: 500px;
+            background: #1e1e2e;
+            border: 1px solid #45475a;
+            border-radius: 12px;
+            color: #cdd6f4;
+            padding: 14px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            resize: vertical;
+            outline: none;
+            line-height: 1.6;
+            tab-size: 4;
+        }
+        textarea:focus {
+            border-color: #89b4fa;
+        }
+        .visual-container {
+            max-height: 550px;
+            overflow-y: auto;
+            overflow-x: auto;
+            padding-right: 5px;
+            background: #1e1e2e;
+            border-radius: 12px;
+            border: 1px solid #45475a;
+            padding: 10px 14px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.8;
+            white-space: nowrap;
+        }
+        .visual-container::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .visual-container::-webkit-scrollbar-thumb {
+            background: #45475a;
+            border-radius: 10px;
+        }
+
+        .code-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: nowrap;
+            gap: 2px;
+            padding: 1px 0;
+            border-radius: 4px;
+            transition: 0.1s;
+            min-height: 28px;
+            white-space: nowrap;
+        }
+        .code-row:hover {
+            background: #313244;
+        }
+        .code-row .line-num {
+            color: #6c7086;
+            font-size: 0.75rem;
+            min-width: 35px;
+            user-select: none;
+            text-align: right;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+        .code-row .keyword { color: #89b4fa; font-weight: 600; }
+        .code-row .type { color: #cba6f7; }
+        .code-row .comment { color: #6c7086; font-style: italic; }
+        .code-row .bracket { color: #f9e2af; }
+        .code-row .func { color: #f5c2e7; }
+        .code-row .number { color: #fab387; }
+        .code-row .string { color: #a6e3a1; }
+        .code-row .operator { color: #f9e2af; }
+        .code-row .text { color: #cdd6f4; }
+        .code-row .indent { color: #6c7086; user-select: none; white-space: pre; }
+
+        .editable {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            background: #1e1e2e;
+            border: 1px solid #585b70;
+            border-radius: 5px;
+            padding: 0 5px;
+            transition: 0.15s;
+            cursor: pointer;
+            vertical-align: middle;
+            flex-shrink: 0;
+            max-width: 600px;
+        }
+        .editable:hover {
+            border-color: #89b4fa;
+            background: #28283a;
+        }
+        .editable input, .editable select {
+            background: transparent;
+            border: none;
+            color: #a6e3a1;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            outline: none;
+            padding: 1px 3px;
+            min-width: 25px;
+            width: auto;
+            height: 22px;
+        }
+        .editable input:focus, .editable select:focus {
+            color: #f9e2af;
+        }
+        
+        /* Специальные стили для числовых полей - убираем стрелки */
+        .editable input[type="number"] {
+            width: 55px;
+            padding-right: 8px;
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+        .editable input[type="number"]::-webkit-inner-spin-button,
+        .editable input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            appearance: none;
+            margin: 0;
+        }
+        
+        /* Для полей с пинами - делаем шире */
+        .editable.pin-field input {
+            min-width: 40px;
+            padding-right: 8px;
+        }
+        
+        /* Для полей с задержками */
+        .editable.delay-field input {
+            min-width: 50px;
+            padding-right: 8px;
+        }
+        
+        .editable select {
+            cursor: pointer;
+            background: #1e1e2e;
+            color: #a6e3a1;
+            padding-right: 15px;
+        }
+        .editable select option {
+            background: #28283a;
+            color: #cdd6f4;
+        }
+        .editable input {
+            min-width: 30px;
+        }
+
+        .editable.type-field { border-color: #cba6f7; }
+        .editable.type-field:hover { border-color: #cba6f7; }
+        .editable.pin-field { border-color: #f5c2e7; }
+        .editable.pin-field:hover { border-color: #f5c2e7; }
+        .editable.delay-field { border-color: #fab387; }
+        .editable.delay-field:hover { border-color: #fab387; }
+        .editable.mode-field { border-color: #a6e3a1; }
+        .editable.mode-field:hover { border-color: #a6e3a1; }
+        .editable.number-field { border-color: #f9e2af; }
+        .editable.number-field:hover { border-color: #f9e2af; }
+        .editable.state-field { border-color: #f5c2e7; }
+        .editable.state-field:hover { border-color: #f5c2e7; }
+        .editable.string-field { border-color: #a6e3a1; }
+        .editable.string-field:hover { border-color: #a6e3a1; }
+        .editable.var-field { border-color: #89b4fa; }
+        .editable.var-field:hover { border-color: #89b4fa; }
+        .editable.cond-field { border-color: #f9e2af; }
+        .editable.cond-field:hover { border-color: #f9e2af; }
+        .editable.expr-field { border-color: #f9e2af; }
+        .editable.expr-field:hover { border-color: #f9e2af; }
+
+        .generated-code {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 14px;
+            color: #cba6f7;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+            min-height: 100px;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #45475a;
+            margin-top: 10px;
+            line-height: 1.6;
+        }
+        .copy-btn {
+            background: #313244;
+            border: 1px solid #6c7086;
+            color: #cdd6f4;
+            padding: 5px 16px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: 0.1s;
+            margin-top: 6px;
+            margin-right: 6px;
+        }
+        .copy-btn:hover {
+            background: #45475a;
+        }
+        .status {
+            color: #a6e3a1;
+            font-size: 0.85rem;
+        }
+        .flex {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .legend {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 6px 14px;
+            background: #1e1e2e;
+            border-radius: 30px;
+            border: 1px solid #45475a;
+            font-size: 0.7rem;
+            margin-bottom: 12px;
+        }
+        .legend span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .legend .dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+        }
+        .dot.type { background: #cba6f7; }
+        .dot.var { background: #89b4fa; }
+        .dot.pin { background: #f5c2e7; }
+        .dot.delay { background: #fab387; }
+        .dot.mode { background: #a6e3a1; }
+        .dot.number { background: #f9e2af; }
+        .dot.string { background: #a6e3a1; }
+        .dot.state { background: #f5c2e7; }
+        .dot.cond { background: #f9e2af; }
+        .dot.expr { background: #f9e2af; }
+    </style>
+</head>
+<body>
+<div class="app">
+    <h1>
+        📝 Arduino Построчный Редактор
+        <small>полный контроль над кодом</small>
+    </h1>
+
+    <div class="toolbar">
+        <button onclick="loadExample('blink')">💡 Blink</button>
+        <button onclick="loadExample('sensor')">📊 Датчик</button>
+        <button onclick="loadExample('pwm')">🎛️ ШИМ</button>
+        <button onclick="loadExample('complex')">🔀 Сложный</button>
+        <button onclick="loadExample('full')">🌟 Полный</button>
+        <button class="primary" onclick="parseAndVisualize()">🔄 Разобрать</button>
+        <button onclick="clearAll()">🗑️ Очистить</button>
+    </div>
+
+    <div class="legend">
+        <span><span class="dot type"></span> Типы</span>
+        <span><span class="dot var"></span> Переменные</span>
+        <span><span class="dot pin"></span> Пины</span>
+        <span><span class="dot delay"></span> Задержки</span>
+        <span><span class="dot mode"></span> Режимы</span>
+        <span><span class="dot number"></span> Числа</span>
+        <span><span class="dot string"></span> Строки</span>
+        <span><span class="dot state"></span> Состояния</span>
+        <span><span class="dot cond"></span> Условия</span>
+        <span><span class="dot expr"></span> Выражения</span>
+        <span style="color:#6c7086;">(кликай на подсвеченное)</span>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h3>📄 Исходный код <span class="badge">вставь свой</span></h3>
+            <textarea id="codeInput" spellcheck="false">// Мигание светодиодом
+int ledPin = 13;
+int delayTime = 500;
+
+void setup() {
+  pinMode(ledPin, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(ledPin, HIGH);
+  delay(delayTime);
+  digitalWrite(ledPin, LOW);
+  delay(delayTime);
+}</textarea>
+            <div class="flex" style="margin-top:10px;">
+                <button class="copy-btn" onclick="copyCode()">📋 Копировать</button>
+                <span id="codeStatus" class="status">✓ готово</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>🧩 Визуальный код <span class="badge">строка за строкой</span></h3>
+            <div id="visualContainer" class="visual-container">
+                <div style="color:#6c7086; padding:20px; text-align:center;">
+                    👆 Нажми <strong style="color:#89b4fa;">"Разобрать"</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+        <h3>⚙️ Собранный код <span class="badge">авто-обновление</span></h3>
+        <div id="generatedCode" class="generated-code">// Здесь появится код с твоими правками</div>
+        <div class="flex">
+            <button class="copy-btn" onclick="copyGenerated()">📋 Копировать</button>
+            <button class="copy-btn" onclick="applyGenerated()">⬅️ Применить в редактор</button>
+            <span id="genStatus" class="status"></span>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ---- Глобальные данные ----
+    let currentLines = [];
+    let currentRawCode = '';
+
+    // ---- DOM ----
+    const codeInput = document.getElementById('codeInput');
+    const visualContainer = document.getElementById('visualContainer');
+    const generatedDiv = document.getElementById('generatedCode');
+
+    // ---- Типы переменных ----
+    const VAR_TYPES = ['int', 'float', 'byte', 'char', 'long', 'unsigned int', 'const int', 'bool', 'String'];
+
+    // ---- Функция для авто-расширения поля ----
+    function autoResizeInput(input) {
+        if (!input) return;
+        // Создаём временный элемент для измерения
+        const temp = document.createElement('span');
+        temp.style.cssText = 'font-family: "Courier New", monospace; font-size: 0.9rem; padding: 1px 3px; visibility: hidden; position: absolute; white-space: pre;';
+        temp.textContent = input.value || input.placeholder || '';
+        document.body.appendChild(temp);
+        let width = temp.offsetWidth + 16; // Добавляем отступ для стрелок
+        document.body.removeChild(temp);
+        
+        // Минимальная и максимальная ширина
+        width = Math.max(width, 30);
+        width = Math.min(width, 500);
+        input.style.width = width + 'px';
+    }
+
+    // ---- Построчный парсер ----
+    function parseLines(code) {
+        const lines = code.split('\n');
+        const result = [];
+
+        lines.forEach((line, index) => {
+            const cleanLine = line;
+            const tokens = [];
+            
+            let indent = 0;
+            const matchIndent = cleanLine.match(/^(\s*)/);
+            if (matchIndent) {
+                indent = matchIndent[1].length;
+            }
+
+            const trimmed = cleanLine.trim();
+
+            if (trimmed === '') {
+                result.push({ index, original: cleanLine, indent, type: 'empty', tokens: [] });
+                return;
+            }
+
+            // ---- Комментарий ----
+            if (trimmed.startsWith('//')) {
+                tokens.push({ type: 'comment', value: trimmed });
+            }
+            // ---- Переменная ----
+            else if (/^(int|float|byte|char|long|unsigned\s+int|const\s+int|bool|String)\s+[A-Za-z_][A-Za-z0-9_]*\s*=/.test(trimmed)) {
+                const varMatch = trimmed.match(/^(int|float|byte|char|long|unsigned\s+int|const\s+int|bool|String)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^;]+);?/);
+                if (varMatch) {
+                    tokens.push({ type: 'type', value: varMatch[1], editable: true, field: 'type', id: `var_type_${index}` });
+                    tokens.push({ type: 'text', value: ' ' });
+                    tokens.push({ type: 'text', value: varMatch[2], editable: true, field: 'name', id: `var_name_${index}` });
+                    tokens.push({ type: 'text', value: ' = ' });
+                    
+                    const val = varMatch[3].trim();
+                    if (val.match(/^[0-9]+$/)) {
+                        tokens.push({ type: 'number', value: val, editable: true, field: 'value', id: `var_val_${index}`, inputType: 'number' });
+                    } else if (val.match(/^A[0-9]+$/i)) {
+                        tokens.push({ type: 'pin', value: val, editable: true, field: 'value', id: `var_val_${index}`, inputType: 'select', options: Array.from({length:16}, (_,i) => `A${i}`) });
+                    } else if (val.startsWith('"') || val.startsWith("'")) {
+                        tokens.push({ type: 'string', value: val, editable: true, field: 'value', id: `var_val_${index}`, inputType: 'text' });
+                    } else {
+                        tokens.push({ type: 'text', value: val, editable: true, field: 'value', id: `var_val_${index}`, inputType: 'text' });
+                    }
+                    if (trimmed.endsWith(';')) {
+                        tokens.push({ type: 'text', value: ';' });
+                    }
+                }
+            }
+            // ---- pinMode ----
+            else if (/pinMode\s*\(/.test(trimmed)) {
+                const pmMatch = trimmed.match(/pinMode\s*\(\s*([A-Za-z0-9_]+)\s*,\s*(INPUT|OUTPUT|INPUT_PULLUP)\s*\)/);
+                if (pmMatch) {
+                    tokens.push({ type: 'keyword', value: 'pinMode' });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    tokens.push({ type: 'pin', value: pmMatch[1], editable: true, field: 'pin', id: `pin_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'text', value: ', ' });
+                    tokens.push({ type: 'mode', value: pmMatch[2], editable: true, field: 'mode', id: `mode_${index}`, inputType: 'select', options: ['OUTPUT', 'INPUT', 'INPUT_PULLUP'] });
+                    tokens.push({ type: 'bracket', value: ');' });
+                }
+            }
+            // ---- digitalWrite ----
+            else if (/digitalWrite\s*\(/.test(trimmed)) {
+                const dwMatch = trimmed.match(/digitalWrite\s*\(\s*([A-Za-z0-9_]+)\s*,\s*(HIGH|LOW)\s*\)/);
+                if (dwMatch) {
+                    tokens.push({ type: 'keyword', value: 'digitalWrite' });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    tokens.push({ type: 'pin', value: dwMatch[1], editable: true, field: 'pin', id: `dw_pin_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'text', value: ', ' });
+                    tokens.push({ type: 'state', value: dwMatch[2], editable: true, field: 'state', id: `dw_state_${index}`, inputType: 'select', options: ['HIGH', 'LOW'] });
+                    tokens.push({ type: 'bracket', value: ');' });
+                }
+            }
+            // ---- analogWrite ----
+            else if (/analogWrite\s*\(/.test(trimmed)) {
+                const awMatch = trimmed.match(/analogWrite\s*\(\s*([A-Za-z0-9_]+)\s*,\s*([^)]+)\)/);
+                if (awMatch) {
+                    tokens.push({ type: 'keyword', value: 'analogWrite' });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    tokens.push({ type: 'pin', value: awMatch[1], editable: true, field: 'pin', id: `aw_pin_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'text', value: ', ' });
+                    const val = awMatch[2].trim();
+                    tokens.push({ type: 'text', value: val, editable: true, field: 'value', id: `aw_val_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'bracket', value: ');' });
+                }
+            }
+            // ---- analogRead ----
+            else if (/analogRead\s*\(/.test(trimmed)) {
+                const arMatch = trimmed.match(/analogRead\s*\(\s*([A-Za-z0-9_]+)\s*\)/);
+                if (arMatch) {
+                    tokens.push({ type: 'keyword', value: 'analogRead' });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    tokens.push({ type: 'pin', value: arMatch[1], editable: true, field: 'pin', id: `ar_pin_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'bracket', value: ');' });
+                }
+            }
+            // ---- delay ----
+            else if (/delay\s*\(/.test(trimmed)) {
+                const dlMatch = trimmed.match(/delay\s*\(\s*([^)]+)\s*\)/);
+                if (dlMatch) {
+                    tokens.push({ type: 'keyword', value: 'delay' });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    const expr = dlMatch[1].trim();
+                    tokens.push({ type: 'text', value: expr, editable: true, field: 'delay', id: `delay_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'bracket', value: ');' });
+                }
+            }
+            // ---- Serial.begin ----
+            else if (/Serial\.begin\s*\(/.test(trimmed)) {
+                const sbMatch = trimmed.match(/Serial\.begin\s*\(\s*([0-9]+)\s*\)/);
+                if (sbMatch) {
+                    tokens.push({ type: 'keyword', value: 'Serial.begin' });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    tokens.push({ type: 'number', value: sbMatch[1], editable: true, field: 'baud', id: `baud_${index}`, inputType: 'number' });
+                    tokens.push({ type: 'bracket', value: ');' });
+                }
+            }
+            // ---- Serial.print / println ----
+            else if (/Serial\.(println|print)\s*\(/.test(trimmed)) {
+                const spMatch = trimmed.match(/Serial\.(println|print)\s*\(\s*([^)]+)\s*\)/);
+                if (spMatch) {
+                    tokens.push({ type: 'keyword', value: `Serial.${spMatch[1]}` });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    const val = spMatch[2].trim();
+                    tokens.push({ type: 'text', value: val, editable: true, field: 'serial', id: `serial_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'bracket', value: ');' });
+                }
+            }
+            // ---- map() ----
+            else if (/map\s*\(/.test(trimmed)) {
+                const mapMatch = trimmed.match(/map\s*\(\s*([^)]+)\s*\)/);
+                if (mapMatch) {
+                    tokens.push({ type: 'func', value: 'map' });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    const expr = mapMatch[1].trim();
+                    tokens.push({ type: 'text', value: expr, editable: true, field: 'map', id: `map_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'bracket', value: ')' });
+                }
+            }
+            // ---- if ----
+            else if (/^if\s*\(/.test(trimmed)) {
+                const ifMatch = trimmed.match(/if\s*\(\s*([^)]+)\s*\)/);
+                if (ifMatch) {
+                    tokens.push({ type: 'keyword', value: 'if' });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    tokens.push({ type: 'text', value: ifMatch[1], editable: true, field: 'condition', id: `if_cond_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'bracket', value: ')' });
+                    const rest = trimmed.replace(/if\s*\([^)]+\)\s*/, '');
+                    if (rest) {
+                        tokens.push({ type: 'text', value: ' ' + rest });
+                    }
+                }
+            }
+            // ---- for ----
+            else if (/^for\s*\(/.test(trimmed)) {
+                const forMatch = trimmed.match(/for\s*\(\s*([^;]+);\s*([^;]+);\s*([^)]+)\s*\)/);
+                if (forMatch) {
+                    tokens.push({ type: 'keyword', value: 'for' });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    tokens.push({ type: 'text', value: forMatch[1], editable: true, field: 'init', id: `for_init_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'text', value: '; ' });
+                    tokens.push({ type: 'text', value: forMatch[2], editable: true, field: 'cond', id: `for_cond_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'text', value: '; ' });
+                    tokens.push({ type: 'text', value: forMatch[3], editable: true, field: 'inc', id: `for_inc_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'bracket', value: ')' });
+                    const rest = trimmed.replace(/for\s*\([^)]+\)\s*/, '');
+                    if (rest) {
+                        tokens.push({ type: 'text', value: ' ' + rest });
+                    }
+                }
+            }
+            // ---- while ----
+            else if (/^while\s*\(/.test(trimmed)) {
+                const whileMatch = trimmed.match(/while\s*\(\s*([^)]+)\s*\)/);
+                if (whileMatch) {
+                    tokens.push({ type: 'keyword', value: 'while' });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    tokens.push({ type: 'text', value: whileMatch[1], editable: true, field: 'condition', id: `while_cond_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'bracket', value: ')' });
+                    const rest = trimmed.replace(/while\s*\([^)]+\)\s*/, '');
+                    if (rest) {
+                        tokens.push({ type: 'text', value: ' ' + rest });
+                    }
+                }
+            }
+            // ---- else ----
+            else if (/^else\s*/.test(trimmed)) {
+                tokens.push({ type: 'keyword', value: 'else' });
+                const rest = trimmed.replace(/^else\s*/, '');
+                if (rest) {
+                    tokens.push({ type: 'text', value: ' ' + rest });
+                }
+            }
+            // ---- Присваивание ----
+            else if (/^[A-Za-z_][A-Za-z0-9_]*\s*=/.test(trimmed) && !/^(if|for|while|else|void|int|float|byte|char|long|unsigned|const|bool|String)/.test(trimmed)) {
+                const assignMatch = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^;]+);?/);
+                if (assignMatch) {
+                    tokens.push({ type: 'text', value: assignMatch[1], editable: true, field: 'var', id: `assign_var_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'text', value: ' = ' });
+                    const expr = assignMatch[2].trim();
+                    tokens.push({ type: 'text', value: expr, editable: true, field: 'expr', id: `assign_expr_${index}`, inputType: 'text' });
+                    if (trimmed.endsWith(';')) {
+                        tokens.push({ type: 'text', value: ';' });
+                    }
+                }
+            }
+            // ---- Строки с фигурными скобками ----
+            else if (/^(void\s+setup|void\s+loop|void\s+[A-Za-z_])/.test(trimmed)) {
+                const funcMatch = trimmed.match(/^(void\s+[A-Za-z_][A-Za-z0-9_]*\s*\([^)]*\)\s*)/);
+                if (funcMatch) {
+                    tokens.push({ type: 'keyword', value: 'void' });
+                    const rest = trimmed.replace(/^void\s+/, '');
+                    tokens.push({ type: 'text', value: rest });
+                } else {
+                    tokens.push({ type: 'text', value: trimmed });
+                }
+            }
+            // ---- Просто текст ----
+            else {
+                let remaining = trimmed;
+                let processed = '';
+                const keywords = ['if', 'for', 'while', 'else', 'return', 'break', 'continue', 'void'];
+                let i = 0;
+                while (i < remaining.length) {
+                    let matched = false;
+                    for (const kw of keywords) {
+                        if (remaining.substr(i, kw.length) === kw && 
+                            (i === 0 || !/[A-Za-z0-9_]/.test(remaining[i-1])) && 
+                            (i+kw.length >= remaining.length || !/[A-Za-z0-9_]/.test(remaining[i+kw.length]))) {
+                            if (processed) {
+                                tokens.push({ type: 'text', value: processed });
+                                processed = '';
+                            }
+                            tokens.push({ type: 'keyword', value: kw });
+                            i += kw.length;
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if (!matched) {
+                        const ch = remaining[i];
+                        if (ch === '{' || ch === '}' || ch === '(' || ch === ')' || ch === ';' || ch === ',') {
+                            if (processed) {
+                                tokens.push({ type: 'text', value: processed });
+                                processed = '';
+                            }
+                            tokens.push({ type: 'bracket', value: ch });
+                        } else {
+                            processed += ch;
+                        }
+                        i++;
+                    }
+                }
+                if (processed) {
+                    tokens.push({ type: 'text', value: processed });
+                }
+            }
+
+            result.push({
+                index: index,
+                original: cleanLine,
+                indent: indent,
+                type: 'code',
+                tokens: tokens.length > 0 ? tokens : [{ type: 'text', value: trimmed }]
+            });
+        });
+
+        return result;
+    }
+
+    // ---- Визуализация ----
+    function renderVisual(lines) {
+        let html = '';
+
+        lines.forEach((line, idx) => {
+            html += `<div class="code-row" data-line="${idx}">`;
+            html += `<span class="line-num">${idx+1}</span>`;
+            
+            if (line.indent > 0) {
+                html += `<span class="indent">${' '.repeat(line.indent)}</span>`;
+            }
+
+            if (line.tokens.length === 0) {
+                html += `</div>`;
+                return;
+            }
+
+            line.tokens.forEach(token => {
+                if (token.editable) {
+                    const cssClass = getTokenClass(token.type);
+                    html += `<span class="editable ${cssClass}" data-type="${token.type}" data-id="${token.id}" data-field="${token.field}">`;
+                    
+                    if (token.inputType === 'select' && token.options) {
+                        html += `<select data-field="${token.field}" data-id="${token.id}">`;
+                        token.options.forEach(opt => {
+                            const selected = opt === token.value ? 'selected' : '';
+                            html += `<option value="${opt}" ${selected}>${opt}</option>`;
+                        });
+                        html += `</select>`;
+                    } else if (token.inputType === 'number') {
+                        // Для чисел делаем чуть шире, чтобы цифры не перекрывались
+                        const valLength = token.value.length;
+                        const width = Math.min(Math.max(valLength * 10 + 16, 50), 150);
+                        html += `<input type="number" value="${token.value}" data-field="${token.field}" data-id="${token.id}" style="min-width:40px; width:${width}px; padding-right:8px;">`;
+                    } else {
+                        const valLength = token.value.length;
+                        const width = Math.min(Math.max(valLength * 8 + 10, 40), 500);
+                        html += `<input type="text" value="${token.value}" data-field="${token.field}" data-id="${token.id}" style="min-width:30px; width:${width}px;">`;
+                    }
+                    
+                    html += `</span>`;
+                } else {
+                    const cssClass = getTokenClass(token.type);
+                    let displayValue = token.value;
+                    displayValue = displayValue.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    html += `<span class="${cssClass}">${displayValue}</span>`;
+                }
+            });
+
+            html += `</div>`;
+        });
+
+        visualContainer.innerHTML = html;
+
+        // Авто-расширение для всех input
+        visualContainer.querySelectorAll('input').forEach(input => {
+            autoResizeInput(input);
+            input.addEventListener('input', function() {
+                autoResizeInput(this);
+                regenerateCode();
+            });
+            input.addEventListener('change', function() {
+                autoResizeInput(this);
+                regenerateCode();
+            });
+        });
+
+        visualContainer.querySelectorAll('select').forEach(el => {
+            el.addEventListener('change', regenerateCode);
+        });
+
+        // Обновляем размеры после отрисовки
+        setTimeout(() => {
+            visualContainer.querySelectorAll('input').forEach(input => autoResizeInput(input));
+        }, 100);
+    }
+
+    // ---- Определение CSS класса ----
+    function getTokenClass(type) {
+        const map = {
+            'keyword': 'keyword',
+            'type': 'type',
+            'comment': 'comment',
+            'bracket': 'bracket',
+            'func': 'func',
+            'number': 'number',
+            'string': 'string',
+            'operator': 'operator',
+            'text': 'text',
+            'space': 'text',
+            'pin': 'pin-field',
+            'mode': 'mode-field',
+            'state': 'state-field',
+            'var_name': 'var-field',
+            'value': 'text'
+        };
+        return map[type] || 'text';
+    }
+
+    // ---- Генерация кода ----
+    function regenerateCode() {
+        const values = {};
+        visualContainer.querySelectorAll('input, select').forEach(el => {
+            const id = el.dataset.id;
+            const field = el.dataset.field;
+            const val = el.value.trim();
+            if (id && field) {
+                if (!values[id]) values[id] = {};
+                values[id][field] = val;
+            }
+        });
+
+        let code = '';
+        const rows = visualContainer.querySelectorAll('.code-row');
+        
+        rows.forEach((row) => {
+            let line = '';
+            
+            const indentSpan = row.querySelector('.indent');
+            if (indentSpan) {
+                line += ' '.repeat(indentSpan.textContent.length);
+            }
+            
+            const children = row.childNodes;
+            
+            children.forEach(child => {
+                if (child.nodeType === 3) {
+                } else if (child.classList && child.classList.contains('editable')) {
+                    const input = child.querySelector('input, select');
+                    if (input) {
+                        line += input.value.trim();
+                    }
+                } else if (child.classList && (child.classList.contains('line-num') || child.classList.contains('indent'))) {
+                } else {
+                    line += child.textContent || '';
+                }
+            });
+
+            if (line.trim() || rows.length > 0) {
+                code += line + '\n';
+            }
+        });
+
+        code = code.replace(/\n+$/, '\n');
+        generatedDiv.textContent = code || '// пусто';
+        document.getElementById('genStatus').textContent = '🔄 обновлено';
+    }
+
+    // ---- Главная функция ----
+    function parseAndVisualize() {
+        const code = codeInput.value;
+        if (!code.trim()) {
+            visualContainer.innerHTML = '❌ Код пуст.';
+            generatedDiv.textContent = '// пусто';
+            return;
+        }
+        currentRawCode = code;
+        const lines = parseLines(code);
+        currentLines = lines;
+        renderVisual(lines);
+        setTimeout(regenerateCode, 50);
+        document.getElementById('genStatus').textContent = '✅ готово';
+    }
+
+    // ---- Загрузка примеров ----
+    function loadExample(type) {
+        const examples = {
+            blink: `// Мигание светодиодом
+int ledPin = 13;
+int delayTime = 500;
+
+void setup() {
+  pinMode(ledPin, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(ledPin, HIGH);
+  delay(delayTime);
+  digitalWrite(ledPin, LOW);
+  delay(delayTime);
+}`,
+            sensor: `// Чтение датчика и ШИМ
+int sensorPin = A0;
+int ledPin = 9;
+
+void setup() {
+  pinMode(ledPin, OUTPUT);
+  Serial.begin(9600);
+}
+
+void loop() {
+  int val = analogRead(sensorPin);
+  int bright = map(val, 0, 1023, 0, 255);
+  analogWrite(ledPin, bright);
+  delay(100);
+  Serial.println(val);
+}`,
+            pwm: `// Плавное изменение яркости
+int ledPin = 9;
+
+void setup() {
+  pinMode(ledPin, OUTPUT);
+}
+
+void loop() {
+  for (int i = 0; i < 255; i++) {
+    analogWrite(ledPin, i);
+    delay(10);
+  }
+  for (int i = 255; i >= 0; i--) {
+    analogWrite(ledPin, i);
+    delay(10);
+  }
+}`,
+            complex: `// Сложный пример
+int ledPin = 13;
+int sensorPin = A0;
+int delayTime = 1000;
+int brightness = 0;
+
+void setup() {
+  pinMode(ledPin, OUTPUT);
+  pinMode(sensorPin, INPUT);
+  Serial.begin(115200);
+}
+
+void loop() {
+  int val = analogRead(sensorPin);
+  brightness = map(val, 0, 1023, 0, 255);
+  analogWrite(ledPin, brightness);
+  digitalWrite(ledPin, HIGH);
+  delay(delayTime);
+  digitalWrite(ledPin, LOW);
+  delay(500);
+  Serial.println(val);
+}`,
+            full: `// Максимальный пример
+const int ledPin = 13;
+int delayTime = 500;
+float temperature = 25.5;
+String message = "Hello Arduino with very long text";
+
+void setup() {
+  pinMode(ledPin, OUTPUT);
+  Serial.begin(9600);
+}
+
+void loop() {
+  if (delayTime > 100 && someOtherCondition == true) {
+    digitalWrite(ledPin, HIGH);
+    delay(delayTime);
+    digitalWrite(ledPin, LOW);
+    delay(delayTime / 2);
+  }
+  for (int i = 0; i < 10; i++) {
+    Serial.println(i);
+  }
+  while (true) {
+    delay(1000);
+  }
+}`
+        };
+        codeInput.value = examples[type] || examples.blink;
+        parseAndVisualize();
+    }
+
+    // ---- Копирование и применение ----
+    function copyCode() {
+        navigator.clipboard.writeText(codeInput.value).then(() => {
+            document.getElementById('codeStatus').textContent = '✅ скопировано';
+            setTimeout(() => document.getElementById('codeStatus').textContent = '✓ готово', 2000);
+        });
+    }
+
+    function copyGenerated() {
+        navigator.clipboard.writeText(generatedDiv.textContent).then(() => {
+            document.getElementById('genStatus').textContent = '📋 скопировано';
+        });
+    }
+
+    function applyGenerated() {
+        const gen = generatedDiv.textContent;
+        if (gen && !gen.includes('пусто')) {
+            codeInput.value = gen;
+            parseAndVisualize();
+            document.getElementById('codeStatus').textContent = '✅ применён';
+        }
+    }
+
+    function clearAll() {
+        codeInput.value = '';
+        visualContainer.innerHTML = '👀 Ожидание кода...';
+        generatedDiv.textContent = '// пусто';
+        document.getElementById('codeStatus').textContent = '✓ очищено';
+        document.getElementById('genStatus').textContent = '';
+        currentLines = [];
+    }
+
+    // ---- Экспорт ----
+    window.loadExample = loadExample;
+    window.parseAndVisualize = parseAndVisualize;
+    window.copyCode = copyCode;
+    window.copyGenerated = copyGenerated;
+    window.applyGenerated = applyGenerated;
+    window.clearAll = clearAll;
+
+    // ---- Инициализация ----
+    document.addEventListener('DOMContentLoaded', () => {
+        loadExample('blink');
+    });
+</script>
+</body>
+</html>
