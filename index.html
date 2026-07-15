@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arduino Построчный Редактор</title>
+    <title>Arduino Полный Редактор</title>
     <style>
         * {
             box-sizing: border-box;
@@ -169,6 +169,8 @@
         .code-row .operator { color: #f9e2af; }
         .code-row .text { color: #cdd6f4; }
         .code-row .indent { color: #6c7086; user-select: none; white-space: pre; }
+        .code-row .directive { color: #f9e2af; font-weight: 600; }
+        .code-row .macro { color: #f5c2e7; }
 
         .editable {
             display: inline-flex;
@@ -204,7 +206,6 @@
             color: #f9e2af;
         }
         
-        /* Специальные стили для числовых полей - убираем стрелки */
         .editable input[type="number"] {
             width: 55px;
             padding-right: 8px;
@@ -216,18 +217,6 @@
             -webkit-appearance: none;
             appearance: none;
             margin: 0;
-        }
-        
-        /* Для полей с пинами - делаем шире */
-        .editable.pin-field input {
-            min-width: 40px;
-            padding-right: 8px;
-        }
-        
-        /* Для полей с задержками */
-        .editable.delay-field input {
-            min-width: 50px;
-            padding-right: 8px;
         }
         
         .editable select {
@@ -264,6 +253,8 @@
         .editable.cond-field:hover { border-color: #f9e2af; }
         .editable.expr-field { border-color: #f9e2af; }
         .editable.expr-field:hover { border-color: #f9e2af; }
+        .editable.macro-field { border-color: #f5c2e7; }
+        .editable.macro-field:hover { border-color: #f5c2e7; }
 
         .generated-code {
             background: #1a1a2e;
@@ -338,8 +329,8 @@
         .dot.state { background: #f5c2e7; }
         .dot.cond { background: #f9e2af; }
         .dot.expr { background: #f9e2af; }
+        .dot.macro { background: #f5c2e7; }
 
-        /* Стиль для счётчика */
         .footer-counter {
             text-align: center;
             margin-top: 30px;
@@ -379,15 +370,14 @@
 <body>
 <div class="app">
     <h1>
-        📝 Arduino Построчный Редактор
-        <small>полный контроль над кодом</small>
+        📝 Arduino Полный Редактор
+        <small>поддержка структур, полей, analogRead(data.pin)</small>
     </h1>
 
     <div class="toolbar">
         <button onclick="loadExample('blink')">💡 Blink</button>
-        <button onclick="loadExample('sensor')">📊 Датчик</button>
-        <button onclick="loadExample('pwm')">🎛️ ШИМ</button>
-        <button onclick="loadExample('complex')">🔀 Сложный</button>
+        <button onclick="loadExample('struct')">📦 Структуры</button>
+        <button onclick="loadExample('advanced')">🔥 Продвинутый</button>
         <button onclick="loadExample('full')">🌟 Полный</button>
         <button class="primary" onclick="parseAndVisualize()">🔄 Разобрать</button>
         <button onclick="clearAll()">🗑️ Очистить</button>
@@ -404,25 +394,47 @@
         <span><span class="dot state"></span> Состояния</span>
         <span><span class="dot cond"></span> Условия</span>
         <span><span class="dot expr"></span> Выражения</span>
+        <span><span class="dot macro"></span> #define</span>
         <span style="color:#6c7086;">(кликай на подсвеченное)</span>
     </div>
 
     <div class="grid">
         <div class="card">
             <h3>📄 Исходный код <span class="badge">вставь свой</span></h3>
-            <textarea id="codeInput" spellcheck="false">// Мигание светодиодом
-int ledPin = 13;
-int delayTime = 500;
+            <textarea id="codeInput" spellcheck="false">// Пример со структурами
+#define LED_PIN 13
+
+static unsigned long lastTime = 0;
+
+struct SensorData {
+  int pin;
+  int value;
+  float temp;
+};
+
+SensorData data = {A0, 0, 0.0};
 
 void setup() {
-  pinMode(ledPin, OUTPUT);
+  Serial.begin(9600);
+  pinMode(LED_PIN, OUTPUT);
 }
 
 void loop() {
-  digitalWrite(ledPin, HIGH);
-  delay(delayTime);
-  digitalWrite(ledPin, LOW);
-  delay(delayTime);
+  unsigned long currentTime = millis();
+  if (currentTime - lastTime > 1000) {
+    lastTime = currentTime;
+    data.value = analogRead(data.pin);
+    data.temp = data.value / 10.0;
+    
+    digitalWrite(LED_PIN, HIGH);
+    delay(100);
+    digitalWrite(LED_PIN, LOW);
+    
+    Serial.print("Value: ");
+    Serial.print(data.value);
+    Serial.print(" | Temp: ");
+    Serial.println(data.temp);
+  }
 }</textarea>
             <div class="flex" style="margin-top:10px;">
                 <button class="copy-btn" onclick="copyCode()">📋 Копировать</button>
@@ -450,7 +462,6 @@ void loop() {
         </div>
     </div>
 
-    <!-- Счётчик посещений -->
     <div class="footer-counter">
         <span class="label">👁️ Посетителей:</span>
         <a href="https://www.hitwebcounter.com" target="_blank">
@@ -460,6 +471,7 @@ void loop() {
                  title="Счётчик посещений">
         </a>
         <span class="separator">|</span>
+        <span>с 2024 года</span>
         <span class="separator">|</span>
         <a href="https://github.com/GreenMan2022/Arduino-Visual-Code-Editor" target="_blank" style="color: #89b4fa;">
             ⭐ GitHub
@@ -477,8 +489,14 @@ void loop() {
     const visualContainer = document.getElementById('visualContainer');
     const generatedDiv = document.getElementById('generatedCode');
 
-    // ---- Типы переменных ----
-    const VAR_TYPES = ['int', 'float', 'byte', 'char', 'long', 'unsigned int', 'const int', 'bool', 'String'];
+    // ---- Все возможные типы переменных ----
+    const VAR_TYPES = [
+        'int', 'float', 'byte', 'char', 'long', 'unsigned int', 'const int', 
+        'bool', 'String', 'double', 'short', 'uint8_t', 'uint16_t', 'uint32_t',
+        'int8_t', 'int16_t', 'int32_t', 'size_t', 'void', 'static int', 
+        'static long', 'static bool', 'static float', 'static byte', 'static char',
+        'static unsigned long', 'static unsigned int', 'unsigned long'
+    ];
 
     // ---- Функция для авто-расширения поля ----
     function autoResizeInput(input) {
@@ -494,7 +512,98 @@ void loop() {
         input.style.width = width + 'px';
     }
 
-    // ---- Построчный парсер ----
+    // ---- Функция для парсинга выражений (analogRead(data.pin)) ----
+    function parseExpression(expr) {
+        const tokens = [];
+        let remaining = expr;
+        let processed = '';
+        let i = 0;
+        
+        // Ищем функции
+        const funcs = ['analogRead', 'digitalRead', 'analogWrite', 'digitalWrite', 'map', 'constrain', 'min', 'max', 'abs'];
+        
+        while (i < remaining.length) {
+            let matched = false;
+            for (const func of funcs) {
+                if (remaining.substr(i, func.length) === func && 
+                    (i === 0 || !/[A-Za-z0-9_]/.test(remaining[i-1])) && 
+                    (i+func.length < remaining.length && remaining[i+func.length] === '(')) {
+                    if (processed) {
+                        tokens.push({ type: 'text', value: processed });
+                        processed = '';
+                    }
+                    // Находим аргументы функции
+                    let depth = 1;
+                    let start = i + func.length + 1;
+                    let end = start;
+                    while (depth > 0 && end < remaining.length) {
+                        if (remaining[end] === '(') depth++;
+                        if (remaining[end] === ')') depth--;
+                        end++;
+                    }
+                    end--;
+                    const args = remaining.substring(start, end).trim();
+                    tokens.push({ type: 'func', value: func });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    
+                    // Рекурсивно парсим аргументы
+                    if (args) {
+                        const argTokens = parseExpression(args);
+                        tokens.push(...argTokens);
+                    }
+                    tokens.push({ type: 'bracket', value: ')' });
+                    i = end + 1;
+                    matched = true;
+                    break;
+                }
+            }
+            
+            if (!matched) {
+                const ch = remaining[i];
+                if (ch === '(' || ch === ')' || ch === ',' || ch === '.' || ch === ';' || ch === ' ' || ch === '=') {
+                    if (processed) {
+                        // Проверяем, не является ли это обращением к полю структуры
+                        if (processed.includes('.')) {
+                            const parts = processed.split('.');
+                            tokens.push({ type: 'text', value: parts[0], editable: true, field: 'struct', id: `expr_struct_${Date.now()}_${Math.random()}`, inputType: 'text' });
+                            tokens.push({ type: 'text', value: '.' });
+                            tokens.push({ type: 'text', value: parts[1], editable: true, field: 'field', id: `expr_field_${Date.now()}_${Math.random()}`, inputType: 'text' });
+                        } else if (processed.match(/^[0-9]+$/)) {
+                            tokens.push({ type: 'number', value: processed, editable: true, field: 'value', id: `expr_num_${Date.now()}_${Math.random()}`, inputType: 'number' });
+                        } else if (processed.match(/^[A-Za-z_][A-Za-z0-9_]*$/)) {
+                            tokens.push({ type: 'text', value: processed, editable: true, field: 'var', id: `expr_var_${Date.now()}_${Math.random()}`, inputType: 'text' });
+                        } else {
+                            tokens.push({ type: 'text', value: processed });
+                        }
+                        processed = '';
+                    }
+                    if (ch !== ' ') {
+                        tokens.push({ type: 'text', value: ch });
+                    }
+                } else {
+                    processed += ch;
+                }
+                i++;
+            }
+        }
+        if (processed) {
+            if (processed.includes('.')) {
+                const parts = processed.split('.');
+                tokens.push({ type: 'text', value: parts[0], editable: true, field: 'struct', id: `expr_struct_${Date.now()}_${Math.random()}`, inputType: 'text' });
+                tokens.push({ type: 'text', value: '.' });
+                tokens.push({ type: 'text', value: parts[1], editable: true, field: 'field', id: `expr_field_${Date.now()}_${Math.random()}`, inputType: 'text' });
+            } else if (processed.match(/^[0-9]+$/)) {
+                tokens.push({ type: 'number', value: processed, editable: true, field: 'value', id: `expr_num_${Date.now()}_${Math.random()}`, inputType: 'number' });
+            } else if (processed.match(/^[A-Za-z_][A-Za-z0-9_]*$/)) {
+                tokens.push({ type: 'text', value: processed, editable: true, field: 'var', id: `expr_var_${Date.now()}_${Math.random()}`, inputType: 'text' });
+            } else {
+                tokens.push({ type: 'text', value: processed });
+            }
+        }
+        return tokens;
+    }
+
+    // ---- Универсальный построчный парсер ----
     function parseLines(code) {
         const lines = code.split('\n');
         const result = [];
@@ -516,32 +625,114 @@ void loop() {
                 return;
             }
 
-            // ---- Комментарий ----
-            if (trimmed.startsWith('//')) {
+            // ---- Многострочный комментарий ----
+            if (trimmed.startsWith('/*') || trimmed.startsWith('*')) {
                 tokens.push({ type: 'comment', value: trimmed });
             }
-            // ---- Переменная ----
-            else if (/^(int|float|byte|char|long|unsigned\s+int|const\s+int|bool|String)\s+[A-Za-z_][A-Za-z0-9_]*\s*=/.test(trimmed)) {
-                const varMatch = trimmed.match(/^(int|float|byte|char|long|unsigned\s+int|const\s+int|bool|String)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^;]+);?/);
-                if (varMatch) {
-                    tokens.push({ type: 'type', value: varMatch[1], editable: true, field: 'type', id: `var_type_${index}` });
+            // ---- #define ----
+            else if (/^#define\s+/.test(trimmed)) {
+                const defineMatch = trimmed.match(/^#define\s+([A-Za-z_][A-Za-z0-9_]*)\s+(.+)/);
+                if (defineMatch) {
+                    tokens.push({ type: 'directive', value: '#define' });
                     tokens.push({ type: 'text', value: ' ' });
-                    tokens.push({ type: 'text', value: varMatch[2], editable: true, field: 'name', id: `var_name_${index}` });
-                    tokens.push({ type: 'text', value: ' = ' });
-                    
-                    const val = varMatch[3].trim();
+                    tokens.push({ type: 'macro', value: defineMatch[1], editable: true, field: 'macro', id: `macro_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'text', value: ' ' });
+                    const val = defineMatch[2].trim();
                     if (val.match(/^[0-9]+$/)) {
-                        tokens.push({ type: 'number', value: val, editable: true, field: 'value', id: `var_val_${index}`, inputType: 'number' });
+                        tokens.push({ type: 'number', value: val, editable: true, field: 'value', id: `macro_val_${index}`, inputType: 'number' });
                     } else if (val.match(/^A[0-9]+$/i)) {
-                        tokens.push({ type: 'pin', value: val, editable: true, field: 'value', id: `var_val_${index}`, inputType: 'select', options: Array.from({length:16}, (_,i) => `A${i}`) });
-                    } else if (val.startsWith('"') || val.startsWith("'")) {
-                        tokens.push({ type: 'string', value: val, editable: true, field: 'value', id: `var_val_${index}`, inputType: 'text' });
+                        tokens.push({ type: 'pin', value: val, editable: true, field: 'value', id: `macro_val_${index}`, inputType: 'select', options: Array.from({length:16}, (_,i) => `A${i}`) });
                     } else {
-                        tokens.push({ type: 'text', value: val, editable: true, field: 'value', id: `var_val_${index}`, inputType: 'text' });
+                        tokens.push({ type: 'text', value: val, editable: true, field: 'value', id: `macro_val_${index}`, inputType: 'text' });
+                    }
+                }
+            }
+            // ---- #include ----
+            else if (/^#include\s+/.test(trimmed)) {
+                tokens.push({ type: 'directive', value: trimmed });
+            }
+            // ---- Комментарий ----
+            else if (trimmed.startsWith('//')) {
+                tokens.push({ type: 'comment', value: trimmed });
+            }
+            // ---- Переменная с любым типом (включая static unsigned long) ----
+            else if (new RegExp(`^(${VAR_TYPES.join('|')})\\s+[A-Za-z_][A-Za-z0-9_]*\\s*[=;\\[{(]`).test(trimmed) || 
+                     /^(static\s+)?unsigned\s+(long|int)\s+[A-Za-z_]/.test(trimmed)) {
+                let varMatch = trimmed.match(/^(static\s+)?(unsigned\s+long|unsigned\s+int|int|float|byte|char|long|const\s+int|bool|String|double|short|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t|size_t|void)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:=\s*([^;]+))?;?/);
+                if (!varMatch) {
+                    varMatch = trimmed.match(/^(static\s+)?(unsigned\s+long|unsigned\s+int)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:=\s*([^;]+))?;?/);
+                }
+                if (varMatch) {
+                    const staticPrefix = varMatch[1] || '';
+                    if (staticPrefix) {
+                        tokens.push({ type: 'keyword', value: 'static' });
+                        tokens.push({ type: 'text', value: ' ' });
+                    }
+                    const typeName = varMatch[2];
+                    const varName = varMatch[3];
+                    const varValue = varMatch[4] ? varMatch[4].trim() : '';
+                    
+                    tokens.push({ type: 'type', value: typeName, editable: true, field: 'type', id: `var_type_${index}`, inputType: 'select', options: VAR_TYPES });
+                    tokens.push({ type: 'text', value: ' ' });
+                    tokens.push({ type: 'text', value: varName, editable: true, field: 'name', id: `var_name_${index}` });
+                    
+                    if (varValue) {
+                        tokens.push({ type: 'text', value: ' = ' });
+                        if (varValue.match(/^[0-9]+$/)) {
+                            tokens.push({ type: 'number', value: varValue, editable: true, field: 'value', id: `var_val_${index}`, inputType: 'number' });
+                        } else if (varValue.match(/^A[0-9]+$/i)) {
+                            tokens.push({ type: 'pin', value: varValue, editable: true, field: 'value', id: `var_val_${index}`, inputType: 'select', options: Array.from({length:16}, (_,i) => `A${i}`) });
+                        } else if (varValue.startsWith('"') || varValue.startsWith("'")) {
+                            tokens.push({ type: 'string', value: varValue, editable: true, field: 'value', id: `var_val_${index}`, inputType: 'text' });
+                        } else if (varValue.startsWith('{')) {
+                            tokens.push({ type: 'text', value: varValue, editable: true, field: 'value', id: `var_val_${index}`, inputType: 'text' });
+                        } else {
+                            tokens.push({ type: 'text', value: varValue, editable: true, field: 'value', id: `var_val_${index}`, inputType: 'text' });
+                        }
                     }
                     if (trimmed.endsWith(';')) {
                         tokens.push({ type: 'text', value: ';' });
                     }
+                }
+            }
+            // ---- Инициализация структуры (SensorData data = {A0, 0, 0.0};) ----
+            else if (/^[A-Za-z_][A-Za-z0-9_]*\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*\{/.test(trimmed) && !/^(if|for|while|else|void|int|float|byte|char|long|unsigned|const|bool|String|double|short|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t|size_t|static|#define)/.test(trimmed)) {
+                const structMatch = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(\{[^;]+\});?/);
+                if (structMatch) {
+                    tokens.push({ type: 'type', value: structMatch[1], editable: true, field: 'type', id: `struct_type_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'text', value: ' ' });
+                    tokens.push({ type: 'text', value: structMatch[2], editable: true, field: 'name', id: `struct_name_${index}` });
+                    tokens.push({ type: 'text', value: ' = ' });
+                    tokens.push({ type: 'text', value: structMatch[3], editable: true, field: 'value', id: `struct_val_${index}`, inputType: 'text' });
+                    if (trimmed.endsWith(';')) {
+                        tokens.push({ type: 'text', value: ';' });
+                    }
+                }
+            }
+            // ---- tone() ----
+            else if (/tone\s*\(/.test(trimmed)) {
+                const toneMatch = trimmed.match(/tone\s*\(\s*([A-Za-z0-9_]+)\s*,\s*([^,]+)\s*(?:,\s*([^)]+))?\s*\)/);
+                if (toneMatch) {
+                    tokens.push({ type: 'keyword', value: 'tone' });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    tokens.push({ type: 'pin', value: toneMatch[1], editable: true, field: 'pin', id: `tone_pin_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'text', value: ', ' });
+                    tokens.push({ type: 'text', value: toneMatch[2].trim(), editable: true, field: 'freq', id: `tone_freq_${index}`, inputType: 'text' });
+                    if (toneMatch[3]) {
+                        tokens.push({ type: 'text', value: ', ' });
+                        tokens.push({ type: 'text', value: toneMatch[3].trim(), editable: true, field: 'duration', id: `tone_dur_${index}`, inputType: 'text' });
+                    }
+                    tokens.push({ type: 'bracket', value: ');' });
+                }
+            }
+            // ---- noTone() ----
+            else if (/noTone\s*\(/.test(trimmed)) {
+                const ntMatch = trimmed.match(/noTone\s*\(\s*([A-Za-z0-9_]+)\s*\)/);
+                if (ntMatch) {
+                    tokens.push({ type: 'keyword', value: 'noTone' });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    tokens.push({ type: 'pin', value: ntMatch[1], editable: true, field: 'pin', id: `nt_pin_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'bracket', value: ');' });
                 }
             }
             // ---- pinMode ----
@@ -568,6 +759,16 @@ void loop() {
                     tokens.push({ type: 'bracket', value: ');' });
                 }
             }
+            // ---- digitalRead ----
+            else if (/digitalRead\s*\(/.test(trimmed)) {
+                const drMatch = trimmed.match(/digitalRead\s*\(\s*([A-Za-z0-9_]+)\s*\)/);
+                if (drMatch) {
+                    tokens.push({ type: 'keyword', value: 'digitalRead' });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    tokens.push({ type: 'pin', value: drMatch[1], editable: true, field: 'pin', id: `dr_pin_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'bracket', value: ');' });
+                }
+            }
             // ---- analogWrite ----
             else if (/analogWrite\s*\(/.test(trimmed)) {
                 const awMatch = trimmed.match(/analogWrite\s*\(\s*([A-Za-z0-9_]+)\s*,\s*([^)]+)\)/);
@@ -591,15 +792,24 @@ void loop() {
                     tokens.push({ type: 'bracket', value: ');' });
                 }
             }
-            // ---- delay ----
-            else if (/delay\s*\(/.test(trimmed)) {
-                const dlMatch = trimmed.match(/delay\s*\(\s*([^)]+)\s*\)/);
+            // ---- delay / delayMicroseconds ----
+            else if (/delay(Microseconds)?\s*\(/.test(trimmed)) {
+                const dlMatch = trimmed.match(/delay(Microseconds)?\s*\(\s*([^)]+)\s*\)/);
                 if (dlMatch) {
-                    tokens.push({ type: 'keyword', value: 'delay' });
+                    const funcName = dlMatch[1] ? 'delayMicroseconds' : 'delay';
+                    tokens.push({ type: 'keyword', value: funcName });
                     tokens.push({ type: 'bracket', value: '(' });
-                    const expr = dlMatch[1].trim();
+                    const expr = dlMatch[2].trim();
                     tokens.push({ type: 'text', value: expr, editable: true, field: 'delay', id: `delay_${index}`, inputType: 'text' });
                     tokens.push({ type: 'bracket', value: ');' });
+                }
+            }
+            // ---- millis / micros ----
+            else if (/(millis|micros)\s*\(/.test(trimmed)) {
+                const mMatch = trimmed.match(/(millis|micros)\s*\(/);
+                if (mMatch) {
+                    tokens.push({ type: 'keyword', value: mMatch[1] });
+                    tokens.push({ type: 'bracket', value: '();' });
                 }
             }
             // ---- Serial.begin ----
@@ -612,9 +822,9 @@ void loop() {
                     tokens.push({ type: 'bracket', value: ');' });
                 }
             }
-            // ---- Serial.print / println ----
-            else if (/Serial\.(println|print)\s*\(/.test(trimmed)) {
-                const spMatch = trimmed.match(/Serial\.(println|print)\s*\(\s*([^)]+)\s*\)/);
+            // ---- Serial.print / println / write ----
+            else if (/Serial\.(println|print|write)\s*\(/.test(trimmed)) {
+                const spMatch = trimmed.match(/Serial\.(println|print|write)\s*\(\s*([^)]+)\s*\)/);
                 if (spMatch) {
                     tokens.push({ type: 'keyword', value: `Serial.${spMatch[1]}` });
                     tokens.push({ type: 'bracket', value: '(' });
@@ -630,7 +840,20 @@ void loop() {
                     tokens.push({ type: 'func', value: 'map' });
                     tokens.push({ type: 'bracket', value: '(' });
                     const expr = mapMatch[1].trim();
-                    tokens.push({ type: 'text', value: expr, editable: true, field: 'map', id: `map_${index}`, inputType: 'text' });
+                    const exprTokens = parseExpression(expr);
+                    tokens.push(...exprTokens);
+                    tokens.push({ type: 'bracket', value: ')' });
+                }
+            }
+            // ---- constrain, min, max, abs ----
+            else if (/(constrain|min|max|abs)\s*\(/.test(trimmed)) {
+                const cmMatch = trimmed.match(/(constrain|min|max|abs)\s*\(\s*([^)]+)\s*\)/);
+                if (cmMatch) {
+                    tokens.push({ type: 'func', value: cmMatch[1] });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    const expr = cmMatch[2].trim();
+                    const exprTokens = parseExpression(expr);
+                    tokens.push(...exprTokens);
                     tokens.push({ type: 'bracket', value: ')' });
                 }
             }
@@ -640,9 +863,27 @@ void loop() {
                 if (ifMatch) {
                     tokens.push({ type: 'keyword', value: 'if' });
                     tokens.push({ type: 'bracket', value: '(' });
-                    tokens.push({ type: 'text', value: ifMatch[1], editable: true, field: 'condition', id: `if_cond_${index}`, inputType: 'text' });
+                    const expr = ifMatch[1].trim();
+                    const exprTokens = parseExpression(expr);
+                    tokens.push(...exprTokens);
                     tokens.push({ type: 'bracket', value: ')' });
                     const rest = trimmed.replace(/if\s*\([^)]+\)\s*/, '');
+                    if (rest) {
+                        tokens.push({ type: 'text', value: ' ' + rest });
+                    }
+                }
+            }
+            // ---- else if ----
+            else if (/^else\s+if\s*\(/.test(trimmed)) {
+                const eifMatch = trimmed.match(/else\s+if\s*\(\s*([^)]+)\s*\)/);
+                if (eifMatch) {
+                    tokens.push({ type: 'keyword', value: 'else if' });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    const expr = eifMatch[1].trim();
+                    const exprTokens = parseExpression(expr);
+                    tokens.push(...exprTokens);
+                    tokens.push({ type: 'bracket', value: ')' });
+                    const rest = trimmed.replace(/else\s+if\s*\([^)]+\)\s*/, '');
                     if (rest) {
                         tokens.push({ type: 'text', value: ' ' + rest });
                     }
@@ -672,7 +913,9 @@ void loop() {
                 if (whileMatch) {
                     tokens.push({ type: 'keyword', value: 'while' });
                     tokens.push({ type: 'bracket', value: '(' });
-                    tokens.push({ type: 'text', value: whileMatch[1], editable: true, field: 'condition', id: `while_cond_${index}`, inputType: 'text' });
+                    const expr = whileMatch[1].trim();
+                    const exprTokens = parseExpression(expr);
+                    tokens.push(...exprTokens);
                     tokens.push({ type: 'bracket', value: ')' });
                     const rest = trimmed.replace(/while\s*\([^)]+\)\s*/, '');
                     if (rest) {
@@ -680,43 +923,111 @@ void loop() {
                     }
                 }
             }
+            // ---- switch ----
+            else if (/^switch\s*\(/.test(trimmed)) {
+                tokens.push({ type: 'keyword', value: trimmed });
+            }
+            // ---- case ----
+            else if (/^case\s+/.test(trimmed)) {
+                tokens.push({ type: 'keyword', value: trimmed });
+            }
+            // ---- default ----
+            else if (/^default\s*:/.test(trimmed)) {
+                tokens.push({ type: 'keyword', value: trimmed });
+            }
             // ---- else ----
-            else if (/^else\s*/.test(trimmed)) {
+            else if (/^else\s*/.test(trimmed) && !/^else\s+if/.test(trimmed)) {
                 tokens.push({ type: 'keyword', value: 'else' });
                 const rest = trimmed.replace(/^else\s*/, '');
                 if (rest) {
                     tokens.push({ type: 'text', value: ' ' + rest });
                 }
             }
-            // ---- Присваивание ----
-            else if (/^[A-Za-z_][A-Za-z0-9_]*\s*=/.test(trimmed) && !/^(if|for|while|else|void|int|float|byte|char|long|unsigned|const|bool|String)/.test(trimmed)) {
-                const assignMatch = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^;]+);?/);
-                if (assignMatch) {
-                    tokens.push({ type: 'text', value: assignMatch[1], editable: true, field: 'var', id: `assign_var_${index}`, inputType: 'text' });
-                    tokens.push({ type: 'text', value: ' = ' });
-                    const expr = assignMatch[2].trim();
-                    tokens.push({ type: 'text', value: expr, editable: true, field: 'expr', id: `assign_expr_${index}`, inputType: 'text' });
+            // ---- Присваивание с полем структуры (data.value = analogRead(data.pin)) ----
+            else if (/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*\s*[+\-*/%]?=/.test(trimmed)) {
+                const fieldAssignMatch = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\s*([+\-*/%])?=\s*([^;]+);?/);
+                if (fieldAssignMatch) {
+                    const operator = fieldAssignMatch[3] || '';
+                    tokens.push({ type: 'text', value: fieldAssignMatch[1], editable: true, field: 'struct', id: `field_struct_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'text', value: '.' });
+                    tokens.push({ type: 'text', value: fieldAssignMatch[2], editable: true, field: 'field', id: `field_name_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'text', value: ` ${operator}= ` });
+                    
+                    const expr = fieldAssignMatch[4].trim();
+                    const exprTokens = parseExpression(expr);
+                    tokens.push(...exprTokens);
+                    
                     if (trimmed.endsWith(';')) {
                         tokens.push({ type: 'text', value: ';' });
                     }
                 }
             }
-            // ---- Строки с фигурными скобками ----
-            else if (/^(void\s+setup|void\s+loop|void\s+[A-Za-z_])/.test(trimmed)) {
-                const funcMatch = trimmed.match(/^(void\s+[A-Za-z_][A-Za-z0-9_]*\s*\([^)]*\)\s*)/);
+            // ---- Простое присваивание ----
+            else if (/^[A-Za-z_][A-Za-z0-9_]*\s*[+\-*/%]?=/.test(trimmed) && !/^(if|for|while|else|void|int|float|byte|char|long|unsigned|const|bool|String|double|short|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t|size_t|static|#define)/.test(trimmed)) {
+                const assignMatch = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*([+\-*/%])?=\s*([^;]+);?/);
+                if (assignMatch) {
+                    const operator = assignMatch[2] || '';
+                    tokens.push({ type: 'text', value: assignMatch[1], editable: true, field: 'var', id: `assign_var_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'text', value: ` ${operator}= ` });
+                    const expr = assignMatch[3].trim();
+                    const exprTokens = parseExpression(expr);
+                    tokens.push(...exprTokens);
+                    if (trimmed.endsWith(';')) {
+                        tokens.push({ type: 'text', value: ';' });
+                    }
+                }
+            }
+            // ---- Тернарный оператор ----
+            else if (/\?.*:/.test(trimmed) && !/^(if|for|while|else|void|int|float|byte|char|long|unsigned|const|bool|String|double|short|uint8_t|uint16_t|uint32_t|int8_t|int16_t|int32_t|size_t|static|#define)/.test(trimmed)) {
+                const ternaryMatch = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^?]+)\?\s*([^:]+):\s*([^;]+);?/);
+                if (ternaryMatch) {
+                    tokens.push({ type: 'text', value: ternaryMatch[1], editable: true, field: 'var', id: `tern_var_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'text', value: ' = ' });
+                    tokens.push({ type: 'text', value: ternaryMatch[2].trim(), editable: true, field: 'cond', id: `tern_cond_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'operator', value: ' ? ' });
+                    tokens.push({ type: 'text', value: ternaryMatch[3].trim(), editable: true, field: 'true_val', id: `tern_true_${index}`, inputType: 'text' });
+                    tokens.push({ type: 'operator', value: ' : ' });
+                    tokens.push({ type: 'text', value: ternaryMatch[4].trim(), editable: true, field: 'false_val', id: `tern_false_${index}`, inputType: 'text' });
+                    if (trimmed.endsWith(';')) {
+                        tokens.push({ type: 'text', value: ';' });
+                    }
+                }
+            }
+            // ---- Структура ----
+            else if (/^struct\s+/.test(trimmed)) {
+                tokens.push({ type: 'keyword', value: trimmed });
+            }
+            // ---- Класс ----
+            else if (/^class\s+/.test(trimmed)) {
+                tokens.push({ type: 'keyword', value: trimmed });
+            }
+            // ---- Перечисление ----
+            else if (/^enum\s+/.test(trimmed)) {
+                tokens.push({ type: 'keyword', value: trimmed });
+            }
+            // ---- Объявление функции ----
+            else if (new RegExp(`^(${VAR_TYPES.join('|')})\\s+[A-Za-z_][A-Za-z0-9_]*\\s*\\(`).test(trimmed)) {
+                const funcMatch = trimmed.match(new RegExp(`^(${VAR_TYPES.join('|')})\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*\\(([^)]*)\\)`));
                 if (funcMatch) {
-                    tokens.push({ type: 'keyword', value: 'void' });
-                    const rest = trimmed.replace(/^void\s+/, '');
-                    tokens.push({ type: 'text', value: rest });
-                } else {
-                    tokens.push({ type: 'text', value: trimmed });
+                    tokens.push({ type: 'type', value: funcMatch[1], editable: true, field: 'type', id: `func_type_${index}`, inputType: 'select', options: VAR_TYPES });
+                    tokens.push({ type: 'text', value: ' ' });
+                    tokens.push({ type: 'func', value: funcMatch[2] });
+                    tokens.push({ type: 'bracket', value: '(' });
+                    if (funcMatch[3].trim()) {
+                        tokens.push({ type: 'text', value: funcMatch[3].trim(), editable: true, field: 'params', id: `func_params_${index}`, inputType: 'text' });
+                    }
+                    tokens.push({ type: 'bracket', value: ')' });
+                    const rest = trimmed.replace(new RegExp(`^(${VAR_TYPES.join('|')})\\s+[A-Za-z_][A-Za-z0-9_]*\\s*\\([^)]*\\)\\s*`), '');
+                    if (rest) {
+                        tokens.push({ type: 'text', value: ' ' + rest });
+                    }
                 }
             }
             // ---- Просто текст ----
             else {
                 let remaining = trimmed;
                 let processed = '';
-                const keywords = ['if', 'for', 'while', 'else', 'return', 'break', 'continue', 'void'];
+                const keywords = ['if', 'for', 'while', 'else', 'return', 'break', 'continue', 'void', 'static', 'switch', 'case', 'default', 'struct', 'class', 'enum', 'public', 'private', 'protected'];
                 let i = 0;
                 while (i < remaining.length) {
                     let matched = false;
@@ -736,7 +1047,7 @@ void loop() {
                     }
                     if (!matched) {
                         const ch = remaining[i];
-                        if (ch === '{' || ch === '}' || ch === '(' || ch === ')' || ch === ';' || ch === ',') {
+                        if (ch === '{' || ch === '}' || ch === '(' || ch === ')' || ch === ';' || ch === ',' || ch === '.') {
                             if (processed) {
                                 tokens.push({ type: 'text', value: processed });
                                 processed = '';
@@ -856,7 +1167,9 @@ void loop() {
             'mode': 'mode-field',
             'state': 'state-field',
             'var_name': 'var-field',
-            'value': 'text'
+            'value': 'text',
+            'directive': 'directive',
+            'macro': 'macro-field'
         };
         return map[type] || 'text';
     }
@@ -943,88 +1256,115 @@ void loop() {
   digitalWrite(ledPin, LOW);
   delay(delayTime);
 }`,
-            sensor: `// Чтение датчика и ШИМ
-int sensorPin = A0;
-int ledPin = 9;
+            struct: `// Пример со структурами и static unsigned long
+#define LED_PIN 13
+
+static unsigned long lastTime = 0;
+
+struct SensorData {
+  int pin;
+  int value;
+  float temp;
+};
+
+SensorData data = {A0, 0, 0.0};
 
 void setup() {
-  pinMode(ledPin, OUTPUT);
   Serial.begin(9600);
+  pinMode(LED_PIN, OUTPUT);
 }
 
 void loop() {
-  int val = analogRead(sensorPin);
-  int bright = map(val, 0, 1023, 0, 255);
-  analogWrite(ledPin, bright);
-  delay(100);
-  Serial.println(val);
-}`,
-            pwm: `// Плавное изменение яркости
-int ledPin = 9;
-
-void setup() {
-  pinMode(ledPin, OUTPUT);
-}
-
-void loop() {
-  for (int i = 0; i < 255; i++) {
-    analogWrite(ledPin, i);
-    delay(10);
-  }
-  for (int i = 255; i >= 0; i--) {
-    analogWrite(ledPin, i);
-    delay(10);
+  unsigned long currentTime = millis();
+  if (currentTime - lastTime > 1000) {
+    lastTime = currentTime;
+    data.value = analogRead(data.pin);
+    data.temp = data.value / 10.0;
+    
+    digitalWrite(LED_PIN, HIGH);
+    delay(100);
+    digitalWrite(LED_PIN, LOW);
+    
+    Serial.print("Value: ");
+    Serial.print(data.value);
+    Serial.print(" | Temp: ");
+    Serial.println(data.temp);
   }
 }`,
-            complex: `// Сложный пример
-int ledPin = 13;
-int sensorPin = A0;
-int delayTime = 1000;
-int brightness = 0;
+            advanced: `// Продвинутый пример
+#define BUZZER_PIN 8
+#define BUTTON_PIN 2
+
+int sensorValue = 0;
+static unsigned long lastTime = 0;
+
+struct SensorData {
+  int pin;
+  int value;
+  float temp;
+};
+
+SensorData data = {A0, 0, 0.0};
 
 void setup() {
-  pinMode(ledPin, OUTPUT);
-  pinMode(sensorPin, INPUT);
   Serial.begin(115200);
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
 }
 
 void loop() {
-  int val = analogRead(sensorPin);
-  brightness = map(val, 0, 1023, 0, 255);
-  analogWrite(ledPin, brightness);
-  digitalWrite(ledPin, HIGH);
-  delay(delayTime);
-  digitalWrite(ledPin, LOW);
-  delay(500);
-  Serial.println(val);
+  unsigned long currentTime = millis();
+  if (currentTime - lastTime > 1000) {
+    lastTime = currentTime;
+    sensorValue = analogRead(data.pin);
+    data.value = sensorValue;
+    data.temp = sensorValue / 10.0;
+    int mapped = map(sensorValue, 0, 1023, 0, 255);
+    analogWrite(9, mapped);
+    tone(BUZZER_PIN, 1000, 200);
+    
+    Serial.print("Value: ");
+    Serial.print(data.value);
+    Serial.print(" | Temp: ");
+    Serial.println(data.temp);
+  }
 }`,
-            full: `// Максимальный пример
-const int ledPin = 13;
-int delayTime = 500;
-float temperature = 25.5;
-String message = "Hello Arduino with very long text";
+            full: `// Полный пример
+#define LED_PIN 13
+#define DELAY_TIME 500
+
+int counter = 0;
+static int blinkCount = 0;
+int numbers[] = {1, 2, 3, 4, 5};
+
+struct MyData {
+  int x;
+  int y;
+};
+
+MyData pos = {10, 20};
 
 void setup() {
-  pinMode(ledPin, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
   Serial.begin(9600);
 }
 
 void loop() {
-  if (delayTime > 100 && someOtherCondition == true) {
-    digitalWrite(ledPin, HIGH);
-    delay(delayTime);
-    digitalWrite(ledPin, LOW);
-    delay(delayTime / 2);
+  if (counter > 10) {
+    counter = 0;
+    blinkCount++;
+    digitalWrite(LED_PIN, HIGH);
+    delay(DELAY_TIME);
+    digitalWrite(LED_PIN, LOW);
+    delay(DELAY_TIME);
   }
-  for (int i = 0; i < 10; i++) {
-    Serial.println(i);
-  }
-  while (true) {
-    delay(1000);
-  }
+  counter++;
+  pos.x = counter * 2;
+  int result = (pos.x > 10) ? pos.x : 0;
+  Serial.println(result);
 }`
         };
-        codeInput.value = examples[type] || examples.blink;
+        codeInput.value = examples[type] || examples.struct;
         parseAndVisualize();
     }
 
@@ -1070,7 +1410,7 @@ void loop() {
 
     // ---- Инициализация ----
     document.addEventListener('DOMContentLoaded', () => {
-        loadExample('blink');
+        loadExample('struct');
     });
 </script>
 </body>
